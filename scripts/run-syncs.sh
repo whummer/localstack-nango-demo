@@ -28,20 +28,26 @@ run_sync() { # <provider_config_key> <sync_name> <model>
     -H "Provider-Config-Key: ${pck}" \
     -d "{\"syncs\":[\"${sync}\"]}"
 
-  for _ in $(seq 1 20); do
+  # Short poll: github/hubspot/linear/shopify/slack have no LocalStack emulator
+  # yet (see README Known gaps), so this is diagnostic rather than a real wait.
+  for _ in $(seq 1 5); do
     local n
     n="$(record_count "$pck" "$model")"
     if [[ "${n:-0}" -gt 0 ]]; then
       log "  ${model}: ${n} record(s)"
       return 0
     fi
-    sleep 3
+    sleep 2
   done
-  warn "  ${model}: no records after 60s (check 'make logs')"
+  warn "  ${model}: no records after 10s (expected: no LocalStack emulator for this provider yet)"
 }
 
-run_sync stripe  stripe-customers StripeCustomer
-run_sync xero    xero-invoices    XeroInvoice
-run_sync hubspot hubspot-contacts HubSpotContact
+run_sync github   github-repos      GithubRepo
+run_sync stripe   stripe-customers  StripeCustomer
+run_sync twilio   twilio-messages   TwilioMessage
+run_sync hubspot  hubspot-contacts  HubSpotContact
+run_sync linear   linear-issues     LinearIssue
+run_sync shopify  shopify-products  ShopifyProduct
+run_sync slack    slack-channels    SlackChannel
 
-log "syncs complete"
+log "syncs complete (resend, posthog and logodev are actions, exercised by make demo)"
