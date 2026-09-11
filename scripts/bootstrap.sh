@@ -28,7 +28,7 @@ integrations=(
   "slack|slack|http://slack.localhost.localstack.cloud:4566"
   "resend|resend|http://resend.localhost.localstack.cloud:4566"
   "posthog|posthog|http://posthog.localhost.localstack.cloud:4566"
-  "logodev|unauthenticated|http://logo.dev.localhost.localstack.cloud:4566"
+  "logodev|unauthenticated|http://logodev.localhost.localstack.cloud:4566"
 )
 
 wait_for "${NANGO}/health" "Nango server"

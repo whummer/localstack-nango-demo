@@ -28,7 +28,7 @@ run_sync() { # <provider_config_key> <sync_name> <model>
     -H "Provider-Config-Key: ${pck}" \
     -d "{\"syncs\":[\"${sync}\"]}"
 
-  # Short poll: most emulators don't implement the read endpoint these syncs need
+  # Short poll: github/hubspot/linear/shopify/slack have no LocalStack emulator
   # yet (see README Known gaps), so this is diagnostic rather than a real wait.
   for _ in $(seq 1 5); do
     local n
@@ -39,7 +39,7 @@ run_sync() { # <provider_config_key> <sync_name> <model>
     fi
     sleep 2
   done
-  warn "  ${model}: no records after 10s (expected for emulators without a read endpoint yet)"
+  warn "  ${model}: no records after 10s (expected: no LocalStack emulator for this provider yet)"
 }
 
 run_sync github   github-repos      GithubRepo
@@ -49,6 +49,5 @@ run_sync hubspot  hubspot-contacts  HubSpotContact
 run_sync linear   linear-issues     LinearIssue
 run_sync shopify  shopify-products  ShopifyProduct
 run_sync slack    slack-channels    SlackChannel
-run_sync posthog  posthog-projects  PosthogProject
 
-log "syncs complete (resend/logo.dev are actions, exercised by make demo)"
+log "syncs complete (resend, posthog and logodev are actions, exercised by make demo)"

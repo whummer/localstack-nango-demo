@@ -8,17 +8,19 @@ integrations without a single real account and without leaving your machine.
 ## What this shows
 
 - A self-hosted Nango server, its Postgres and Redis, all in Docker.
-- Ten integrations, one per Application Emulator: GitHub, Stripe, Twilio, HubSpot,
-  Linear, Shopify, Slack, Resend, PostHog, logo.dev — written in Nango's
-  current zero-yaml `createSync`/`createAction` format.
+- Ten Nango integrations — GitHub, Stripe, Twilio, HubSpot, Linear, Shopify,
+  Slack, Resend, PostHog, logo.dev — written in Nango's current zero-yaml
+  `createSync`/`createAction` format. All ten deploy and work against Nango
+  normally; **5 of them** (Stripe, Twilio, PostHog, Resend, logo.dev) also
+  have a real LocalStack Application Emulator to run against locally today.
 - Nango's proxy and syncs pointed at the emulators instead of the real APIs, using
   a per-request base URL override.
 - One dev loop, `make up bootstrap deploy seed sync test`, that also runs
   unchanged in CI.
 
 > Application Emulators are a new, evolving LocalStack feature and not fully
-> documented publicly yet. Endpoint coverage varies by emulator — see
-> [Known gaps](#known-gaps).
+> documented publicly yet — see [Known gaps](#known-gaps) for exactly which
+> integrations have one right now and why.
 
 ## Architecture
 
@@ -35,8 +37,8 @@ integrations without a single real account and without leaving your machine.
                                                         ▼
                        ┌───────────────────────────────────────────────────┐
                        │     LocalStack Application Emulators       :4566  │
-                       │   github. stripe. twilio. hubspot. linear.        │
-                       │   shopify. slack. resend. posthog. logo.dev.      │
+                       │       stripe.  twilio.  posthog.  resend.         │
+                       │              logodev.                             │
                        │          localhost.localstack.cloud               │
                        └───────────────────────────────────────────────────┘
 ```
@@ -100,18 +102,25 @@ whole loop end to end.
 
 ## Integrations
 
-| Emulator    | Provider config key | Nango script kind        | Model / action    |
-| ------- | -------------------- | ------------------------ | ------------------ |
-| GitHub  | `github`             | sync `github-repos`      | `GithubRepo`        |
-| Stripe  | `stripe`              | sync `stripe-customers`  | `StripeCustomer`    |
-| Twilio  | `twilio`              | sync `twilio-messages`   | `TwilioMessage`     |
-| HubSpot | `hubspot`             | sync `hubspot-contacts`  | `HubSpotContact`    |
-| Linear  | `linear`              | sync `linear-issues` (GraphQL) | `LinearIssue` |
-| Shopify | `shopify`             | sync `shopify-products`  | `ShopifyProduct`    |
-| Slack   | `slack`               | sync `slack-channels`    | `SlackChannel`      |
-| Resend  | `resend`              | action `send-email`      | —                   |
-| PostHog | `posthog`             | sync `posthog-projects`  | `PosthogProject`    |
+### With a local emulator today
+
+| Twin    | Provider config key | Nango script kind      | Model / action  |
+| ------- | -------------------- | ----------------------- | --------------- |
+| Stripe  | `stripe`              | sync `stripe-customers` | `StripeCustomer` |
+| Twilio  | `twilio`              | sync `twilio-messages`  | `TwilioMessage`  |
+| PostHog | `posthog`             | action `capture-event`  | —                |
+| Resend  | `resend`              | action `send-email`     | —                |
 | logo.dev| `logodev`             | action `fetch-logo` (unauthenticated provider) | — |
+
+### Nango-only for now (no local emulator yet — see Known gaps)
+
+| Integration | Provider config key | Nango script kind              | Model / action |
+| ----------- | -------------------- | ------------------------------- | -------------- |
+| GitHub      | `github`             | sync `github-repos`             | `GithubRepo`    |
+| HubSpot     | `hubspot`             | sync `hubspot-contacts`         | `HubSpotContact`|
+| Linear      | `linear`              | sync `linear-issues` (GraphQL)  | `LinearIssue`   |
+| Shopify     | `shopify`             | sync `shopify-products`         | `ShopifyProduct`|
+| Slack       | `slack`               | sync `slack-channels`           | `SlackChannel`  |
 
 ## Project layout
 
@@ -145,27 +154,38 @@ needs one repository secret:
 
 ## Known gaps
 
-Application Emulators are new and evolving, so:
+Application Emulators are new, undocumented, and evolving. As of this writing:
 
-- **Twilio and Resend never get a working connection here.** Both use an
-  auth mode (`BASIC` / `API_KEY`) for which Nango's own `POST /connections`
-  runs a live credentials check against the *real* API
-  (`api.twilio.com` / `api.resend.com`) before accepting the connection —
-  there's no way to point that check at the emulator instead. `make bootstrap`
-  detects this (`connection_test_failed`) and reports it clearly rather than
-  failing the whole loop; their syncs/actions still deploy fine, they just
-  have no connection to run against locally.
-- **Most emulators currently implement `POST` (create) but not `GET` (read).**
-  Every emulator routes `POST` correctly, but a `GET` to the same emulator mostly
-  falls through to LocalStack's default S3 handler instead (a `NoSuchBucket`
-  XML error). As of this writing only Stripe and Linear round-trip a create
-  → proxy-read; `tests/integration.test.mjs` reports every emulator's outcome
-  without failing the suite over a single missing route, since this is
-  endpoint coverage, not a wiring bug: a raw echo server swapped in for a
-  emulator on the same docker network confirmed the Nango proxy sends the
-  correct `Host` header (which is what LocalStack's emulator routing keys off)
-  for `GET` and `POST` alike, so the gap is inside the emulator/LocalStack
-  routing, not in this repo or in Nango.
+- **Only 5 emulators exist at all: Stripe, Twilio, PostHog, Resend, logo.dev.**
+  Confirmed by reading the `localstack-pro` source (`localstack-pro-apps`) and
+  the emulator binary catalog at
+  [WonderTwin-AI/registry](https://github.com/WonderTwin-AI/registry) — GitHub,
+  HubSpot, Linear, Shopify and Slack simply have no emulator built yet, in
+  either place. `docker-compose.yml`'s `TWINS_ENABLED` only requests the 5
+  that exist; asking LocalStack to start the other 5 just fails after a
+  timeout, for every request, not intermittently. Their Nango integrations
+  are still in `nango-integrations/` and deploy fine — Nango itself supports
+  all 10 against the real APIs — there's just nothing local to run them
+  against yet. `tests/integration.test.mjs` marks those 5 `skip` (not
+  `todo`): this isn't a coverage gap that closes on its own.
+- **The emulator's plugin name is `logodev`, not `logo.dev`.** Using the
+  dotted, brand-accurate form in `TWINS_ENABLED` (an easy mistake — it's what
+  the vendor's own domain is called) silently keeps that emulator from ever
+  starting. The subdomain is `logodev.localhost.localstack.cloud`.
+- **Twilio and Resend never get a working Nango connection**, even though
+  their emulators are real. Both use an auth mode (`BASIC` / `API_KEY`) for
+  which Nango's own `POST /connections` runs a live credentials check
+  against the *real* API (`api.twilio.com` / `api.resend.com`) before
+  accepting the connection — there's no way to point that check at the
+  emulator instead. `make bootstrap` detects this (`connection_test_failed`)
+  and reports it clearly rather than failing the whole loop; their
+  syncs/actions still deploy fine, they just have no connection to run
+  against locally. `tests/integration.test.mjs` marks both `skip` for this
+  reason.
+- **PostHog's emulator has no "list projects" endpoint** — per the registry,
+  it simulates event capture and feature-flag evaluation (`/capture/`,
+  `/decide`), not a projects API. `nango-integrations/posthog/` is an
+  action (`capture-event`) rather than a sync for this reason.
 - `scripts/bootstrap.sh` reads each provider's auth mode from Nango's own
   `GET /providers/<name>` rather than hardcoding it, so it adapts if that
   changes; `scripts/deploy.sh` deploys one sync/action at a time so a
@@ -178,9 +198,12 @@ Application Emulators are new and evolving, so:
 - **Proxy calls return `base_url_override_not_allowed`**: the emulator hostname
   resolved to `127.0.0.1` instead of the LocalStack container. Confirm the
   network aliases in `docker-compose.yml` and that LocalStack is up.
-- **A emulator responds with an S3 `NoSuchBucket` error**: that emulator isn't
-  actually mounted — check `TWINS_ENABLED` and the emulator's spelling, and check
-  `make logs` for `loaded N emulators` at LocalStack startup.
+- **An emulator responds with an S3 `NoSuchBucket` error**: that emulator isn't
+  actually mounted — check `make logs` for `Twins: <name> ready at ...` vs
+  `Twins: <name> never reported healthy ... not mounting it` at LocalStack
+  startup. Only Stripe, Twilio, PostHog, Resend and logo.dev exist as
+  emulators right now (see Known gaps); confirm the name in `TWINS_ENABLED`
+  matches exactly (`logodev`, not `logo.dev`).
 - **`nango deploy` fails with `file_upload_error`**: the `CI=true` env on
   `nango-server` is missing; the server is trying to use S3.
 - **`make bootstrap` cannot resolve the secret key**: the Nango server or its

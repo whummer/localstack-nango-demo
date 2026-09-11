@@ -6,5 +6,5 @@ import './linear/syncs/linear-issues.js';
 import './shopify/syncs/shopify-products.js';
 import './slack/syncs/slack-channels.js';
 import './resend/actions/send-email.js';
-import './posthog/syncs/posthog-projects.js';
+import './posthog/actions/capture-event.js';
 import './logodev/actions/fetch-logo.js';

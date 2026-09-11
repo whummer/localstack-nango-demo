@@ -12,8 +12,8 @@ source scripts/lib.sh
 
 NANGO="${NANGO_HOSTPORT:-http://localhost:3003}"
 
-syncs=(stripe-customers github-repos twilio-messages hubspot-contacts linear-issues shopify-products slack-channels posthog-projects)
-actions=(send-email fetch-logo)
+syncs=(stripe-customers github-repos twilio-messages hubspot-contacts linear-issues shopify-products slack-channels)
+actions=(send-email capture-event fetch-logo)
 
 wait_for "${NANGO}/health" "Nango server"
 KEY="$(nango_secret_key)"

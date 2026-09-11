@@ -56,8 +56,10 @@ log "Slack channels"
 proxy GET slack http://slack.localhost.localstack.cloud:4566 "/api/conversations.list" |
   pretty '.channels[]? | {id, name}'
 
-log "PostHog projects"
-proxy GET posthog http://posthog.localhost.localstack.cloud:4566 "/api/projects/" |
+log "PostHog: capture an event"
+proxy POST posthog http://posthog.localhost.localstack.cloud:4566 "/capture/" \
+  -H "Content-Type: application/json" \
+  -d '{"api_key":"phx_emulator0000000000000000000","event":"demo_event","distinct_id":"demo-user","properties":{"source":"localstack-nango-demo"}}' |
   pretty '.'
 
 log "Resend: send an email"
@@ -67,6 +69,6 @@ proxy POST resend http://resend.localhost.localstack.cloud:4566 "/emails" \
   pretty '.'
 
 log "logo.dev: fetch a logo"
-proxy GET logodev http://logo.dev.localhost.localstack.cloud:4566 "/stripe.com" -o /dev/null -w '  HTTP %{http_code}, content-type %{content_type}\n'
+proxy GET logodev http://logodev.localhost.localstack.cloud:4566 "/stripe.com" -o /dev/null -w '  HTTP %{http_code}, content-type %{content_type}\n'
 
 log "demo complete"

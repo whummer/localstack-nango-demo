@@ -3,22 +3,24 @@
 // Run via `make test` (it injects NANGO_SECRET_KEY), or:
 //   NANGO_SECRET_KEY=$(make -s nango-key) node --test tests/
 //
-// LocalStack's Application Emulators are a new, evolving, undocumented feature.
-// Every emulator correctly routes POST (create) calls, but most don't yet
-// implement the corresponding GET (list/read) route - those fall through to
-// LocalStack's default S3 handler instead of the emulator (a `NoSuchBucket` XML
-// error). Confirmed with a raw echo server on the same docker network that
-// Nango sends the same, correct Host header for GET and POST alike, so this
-// is an emulator/LocalStack routing gap, not something wrong in this repo's
-// wiring or in Nango - see README's "Known gaps".
+// Only 5 of the 10 requested integrations have a real LocalStack Application
+// Emulator behind them right now. Confirmed against the localstack-pro
+// source and https://github.com/WonderTwin-AI/registry (the emulator binary
+// catalog): only stripe, twilio, posthog, resend and logodev exist as
+// emulators. GitHub, HubSpot, Linear, Shopify and Slack have real Nango
+// integrations here (and Nango itself supports them fine against the real
+// APIs) but no local emulator to run them against yet - LocalStack tries to
+// start them, they don't exist, so `docker-compose.yml` doesn't request
+// them via TWINS_ENABLED at all.
 //
-// Tests for emulators with no read support yet are marked `todo`: they still run
-// and their real assertion is checked, but a failure there is reported
-// (visible in the output as `not ok ... # TODO`) without failing the build.
-// Drop the `todo` option once an emulator gains read support. Twilio and Resend
-// are `skip`, not `todo`: Nango verifies their BASIC/API_KEY credentials
-// live against the real API before accepting a connection, so fake
-// credentials structurally can never produce a working connection here.
+// So: the 5 real emulators get real, hard-assertion tests below - a failure
+// there is a real regression and fails the build. The other 5 are `skip`,
+// not `todo`: this isn't a coverage gap that closes on its own, it's a
+// dependency that doesn't exist yet. Twilio and Resend are also `skip` for a
+// second, independent reason even though their emulators exist: Nango
+// verifies their BASIC/API_KEY credentials live against the real API before
+// accepting a connection, so fake credentials can never produce a working
+// connection here either way.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -36,7 +38,7 @@ const EMU = {
     slack: 'http://slack.localhost.localstack.cloud:4566',
     resend: 'http://resend.localhost.localstack.cloud:4566',
     posthog: 'http://posthog.localhost.localstack.cloud:4566',
-    logodev: 'http://logo.dev.localhost.localstack.cloud:4566',
+    logodev: 'http://logodev.localhost.localstack.cloud:4566',
 };
 
 assert.ok(SECRET, 'NANGO_SECRET_KEY must be set (use `make test`)');
@@ -60,7 +62,7 @@ const proxy = (providerConfigKey, baseUrl, path, init = {}) =>
 // Fails with the response body for context, without consuming it when the
 // call actually succeeded (awaiting res.text() unconditionally, e.g. inside
 // an assert message template, consumes the body even on the passing path -
-// that previously broke the follow-up res.json() call with "body already
+// that previously broke a follow-up res.json() call with "body already
 // read").
 async function assertOk(res, label) {
     if (!res.ok) {
@@ -80,21 +82,7 @@ test('Nango server is healthy', async () => {
     assert.equal(res.ok, true);
 });
 
-test('GitHub: a repo created in the emulator is readable through the Nango proxy', { todo: 'emulator does not implement GET /user/repos yet' }, async () => {
-    const name = `demo-repo-${Date.now()}`;
-    const created = await fetch(`${EMU.github}/user/repos`, {
-        method: 'POST',
-        headers: { Authorization: 'Bearer emulator-token', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-    });
-    await assertOk(created, 'emulator create');
-
-    const res = await proxy('github', EMU.github, '/user/repos');
-    await assertOk(res, 'proxy read');
-    const body = await res.json();
-    const names = (Array.isArray(body) ? body : []).map((r) => r.name);
-    assert.ok(names.includes(name), `expected ${name} in ${JSON.stringify(names)}`);
-});
+// ─── The 5 real emulators: stripe, twilio, posthog, resend, logodev ────────
 
 test('Stripe: a customer created in the emulator is readable through the Nango proxy', async () => {
     const email = `proxy-${Date.now()}@example.com`;
@@ -121,46 +109,17 @@ test(
     },
 );
 
-test('HubSpot: a contact created in the emulator is readable through the Nango proxy', { todo: 'emulator does not implement GET /crm/v3/objects/contacts yet' }, async () => {
-    const email = `proxy-${Date.now()}@example.com`;
-    const created = await fetch(`${EMU.hubspot}/crm/v3/objects/contacts`, {
-        method: 'POST',
-        headers: { Authorization: 'Bearer emulator-token', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ properties: { email, firstname: 'Proxy', lastname: 'Roundtrip' } }),
-    });
-    await assertOk(created, 'emulator create');
-
-    const res = await proxy('hubspot', EMU.hubspot, '/crm/v3/objects/contacts?properties=email&limit=100');
-    await assertOk(res, 'proxy read');
-    const body = await res.json();
-    const emails = (body.results ?? []).map((c) => c.properties?.email);
-    assert.ok(emails.includes(email), `expected ${email} in ${JSON.stringify(emails)}`);
-});
-
-test('Linear: issues are readable through the Nango proxy (GraphQL)', async () => {
-    const res = await proxy('linear', EMU.linear, '/graphql', {
+test('PostHog: an event can be captured through the Nango proxy', async () => {
+    const res = await proxy('posthog', EMU.posthog, '/capture/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: 'query { issues(first: 1) { nodes { id } } }' }),
+        body: JSON.stringify({
+            api_key: 'phx_emulator0000000000000000000',
+            event: `proxy_test_${Date.now()}`,
+            distinct_id: 'demo-user',
+        }),
     });
-    await assertOk(res, 'proxy read');
-    const body = await res.json();
-    assert.ok(Array.isArray(body.data?.issues?.nodes), `expected an issues array, got ${JSON.stringify(body)}`);
-});
-
-test('Shopify: products are readable through the Nango proxy', { todo: 'emulator does not implement GET /admin/api/2024-01/products.json yet' }, async () => {
-    const res = await proxy('shopify', EMU.shopify, '/admin/api/2024-01/products.json');
-    await assertOk(res, 'proxy read');
-});
-
-test('Slack: channels are readable through the Nango proxy', { todo: 'emulator does not implement GET /api/conversations.list yet' }, async () => {
-    const res = await proxy('slack', EMU.slack, '/api/conversations.list');
-    await assertOk(res, 'proxy read');
-});
-
-test('PostHog: projects are readable through the Nango proxy', { todo: 'emulator does not implement GET /api/projects/ yet' }, async () => {
-    const res = await proxy('posthog', EMU.posthog, '/api/projects/');
-    await assertOk(res, 'proxy read');
+    await assertOk(res, 'proxy capture');
 });
 
 test(
@@ -176,10 +135,71 @@ test(
     },
 );
 
-test('logo.dev: a logo is fetchable through the Nango proxy', { todo: 'emulator does not implement GET /:domain yet' }, async () => {
+test('logo.dev: a logo is fetchable through the Nango proxy', async () => {
     const res = await proxy('logodev', EMU.logodev, '/stripe.com');
     await assertOk(res, 'proxy read');
 });
+
+// ─── The 5 requested integrations with no LocalStack emulator yet ──────────
+// Real Nango integrations exist for all of these (nango-integrations/<name>)
+// and deploy fine; there is simply nothing local to run them against.
+
+const skipNoEmulator = { skip: 'no LocalStack emulator for this provider yet (not in https://github.com/WonderTwin-AI/registry)' };
+
+test('GitHub: a repo created in the emulator is readable through the Nango proxy', skipNoEmulator, async () => {
+    const name = `demo-repo-${Date.now()}`;
+    const created = await fetch(`${EMU.github}/user/repos`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer emulator-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+    });
+    await assertOk(created, 'emulator create');
+
+    const res = await proxy('github', EMU.github, '/user/repos');
+    await assertOk(res, 'proxy read');
+    const body = await res.json();
+    const names = (Array.isArray(body) ? body : []).map((r) => r.name);
+    assert.ok(names.includes(name), `expected ${name} in ${JSON.stringify(names)}`);
+});
+
+test('HubSpot: a contact created in the emulator is readable through the Nango proxy', skipNoEmulator, async () => {
+    const email = `proxy-${Date.now()}@example.com`;
+    const created = await fetch(`${EMU.hubspot}/crm/v3/objects/contacts`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer emulator-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ properties: { email, firstname: 'Proxy', lastname: 'Roundtrip' } }),
+    });
+    await assertOk(created, 'emulator create');
+
+    const res = await proxy('hubspot', EMU.hubspot, '/crm/v3/objects/contacts?properties=email&limit=100');
+    await assertOk(res, 'proxy read');
+    const body = await res.json();
+    const emails = (body.results ?? []).map((c) => c.properties?.email);
+    assert.ok(emails.includes(email), `expected ${email} in ${JSON.stringify(emails)}`);
+});
+
+test('Linear: issues are readable through the Nango proxy (GraphQL)', skipNoEmulator, async () => {
+    const res = await proxy('linear', EMU.linear, '/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: 'query { issues(first: 1) { nodes { id } } }' }),
+    });
+    await assertOk(res, 'proxy read');
+    const body = await res.json();
+    assert.ok(Array.isArray(body.data?.issues?.nodes), `expected an issues array, got ${JSON.stringify(body)}`);
+});
+
+test('Shopify: products are readable through the Nango proxy', skipNoEmulator, async () => {
+    const res = await proxy('shopify', EMU.shopify, '/admin/api/2024-01/products.json');
+    await assertOk(res, 'proxy read');
+});
+
+test('Slack: channels are readable through the Nango proxy', skipNoEmulator, async () => {
+    const res = await proxy('slack', EMU.slack, '/api/conversations.list');
+    await assertOk(res, 'proxy read');
+});
+
+// ─── Sync engine (separate from the proxy tested above) ────────────────────
 
 test(
     'the stripe-customers sync stores records in Nango',

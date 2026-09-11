@@ -5,7 +5,7 @@ import * as z from 'zod';
 // logo.dev is a public, unauthenticated image API (no OAuth/API key needed
 // for the demo), so this integration uses Nango's "unauthenticated" provider
 // type rather than OAuth2 credentials.
-const EMULATOR_BASE_URL = 'http://logo.dev.localhost.localstack.cloud:4566';
+const EMULATOR_BASE_URL = 'http://logodev.localhost.localstack.cloud:4566';
 
 const input = z.object({
     domain: z.string()

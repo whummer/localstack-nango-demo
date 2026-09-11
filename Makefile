@@ -28,9 +28,9 @@ up: check-env ## Start LocalStack and the self-hosted Nango stack
 
 .PHONY: wait
 wait: ## Block until LocalStack and Nango are healthy
-	@# 150 tries * 2s = 300s: with 10 Application Emulators enabled, LocalStack's
+	@# 90 tries * 2s = 180s: with 5 Application Emulators enabled, LocalStack's
 	@# own startup takes noticeably longer than a bare instance.
-	@./scripts/lib.sh wait_for "$(LOCALSTACK)/_localstack/health" "LocalStack" 150
+	@./scripts/lib.sh wait_for "$(LOCALSTACK)/_localstack/health" "LocalStack" 90
 	@./scripts/lib.sh wait_for "$(NANGO_HOST)/health" "Nango server"
 
 .PHONY: down

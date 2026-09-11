@@ -63,10 +63,13 @@ req "create channel" -X POST "${SLACK}/api/conversations.create" \
   -H "Authorization: Bearer xoxb-emulator-token" -H "Content-Type: application/json" \
   -d '{"name":"demo-channel"}'
 
-log "PostHog: projects"
-req "create project" -X POST "${POSTHOG}/api/projects/" \
-  -H "Authorization: Bearer phx_emulator_token" -H "Content-Type: application/json" \
-  -d '{"name":"Demo Project"}'
+log "PostHog: capture an event"
+req "capture event" -X POST "${POSTHOG}/capture/" \
+  -H "Content-Type: application/json" \
+  -d '{"api_key":"phx_emulator0000000000000000000","event":"demo_seed","distinct_id":"demo-user"}'
 
-log "seed complete (Linear/Resend/logo.dev have no seed step: Linear is read via a fixed"
-log "GraphQL query, Resend/logo.dev are exercised as actions in make demo / the tests)"
+log "seed complete"
+log "  github/hubspot/shopify/slack have no LocalStack emulator yet (see README Known gaps) -"
+log "  these calls are expected to come back 404/not-found."
+log "  Linear/Resend/logodev have no separate seed step: Linear is read via a fixed GraphQL"
+log "  query, Resend/logodev are exercised as actions in make demo / the tests."
