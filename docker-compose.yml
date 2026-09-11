@@ -72,11 +72,17 @@ services:
       FLAG_SERVE_CONNECT_UI: "true"
       NANGO_DASHBOARD_USERNAME: admin
       NANGO_DASHBOARD_PASSWORD: admin
-      # Seed the local environment secret key so scripts can run unattended.
-      NANGO_SECRET_KEY: ${NANGO_SECRET_KEY:-nango-demo-secret-key}
-      # Nango's proxy blocks private / loopback override targets by default
-      # (SSRF guard). The emulators are local, so opt in for development only.
-      NANGO_PROXY_ALLOW_PRIVATE_TARGETS: "true"
+      # Nango's egress guard blocks loopback outright and RFC1918 by default.
+      # The emulators are reached at the LocalStack container's private IP (via
+      # the network aliases below), so relax the policy for local development.
+      # Do NOT use this in production.
+      NANGO_OUTBOUND_URL_POLICY: '{"mode":"permissive","blockPrivateIps":false,"blockLinkLocal":false}'
+      NANGO_PROXY_BASE_URL_OVERRIDE_ENABLED: "true"
+      NANGO_PROXY_BASE_URL_OVERRIDE_DENYLIST: "[]"
+      # Store deployed integration bundles on the container filesystem instead of
+      # S3. The hosted image otherwise requires an S3 bucket for `nango deploy`;
+      # this flag makes it use local storage, matching how it behaves in CI.
+      CI: "true"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://localhost:3003/health || exit 1"]
       interval: 5s

@@ -1,32 +1,52 @@
-import type { NangoSync } from 'nango';
-import type { StripeCustomer } from '../../models';
+import { createSync } from 'nango';
+import * as z from 'zod';
 
-/**
- * Pulls Stripe customers via the Nango proxy. The proxy target is overridden to
- * the LocalStack Stripe emulator (see scripts/bootstrap.sh, which sets the
- * integration base URL, and demo.sh, which also sends Base-Url-Override).
- */
-export default async function fetchData(nango: NangoSync): Promise<void> {
-  let startingAfter: string | undefined;
+// The Nango proxy is pointed at the LocalStack Stripe emulator instead of
+// api.stripe.com. On the compose network this host resolves to the LocalStack
+// container; the emulator routes on the `stripe.` subdomain.
+const EMULATOR_BASE_URL = 'http://stripe.localhost.localstack.cloud:4566';
 
-  do {
-    const res = await nango.get({
-      endpoint: '/v1/customers',
-      params: { limit: 100, ...(startingAfter ? { starting_after: startingAfter } : {}) },
-    });
+const stripeCustomer = z.object({
+    id: z.string(),
+    email: z.string(),
+    name: z.string()
+});
 
-    const page = (res.data?.data ?? []) as Array<Record<string, any>>;
-    const customers: StripeCustomer[] = page.map((c) => ({
-      id: String(c.id),
-      email: c.email ?? '',
-      name: c.name ?? '',
-    }));
+type StripeCustomer = z.infer<typeof stripeCustomer>;
 
-    if (customers.length > 0) {
-      await nango.batchSave(customers, 'StripeCustomer');
-      startingAfter = customers[customers.length - 1].id;
+const sync = createSync({
+    description: 'Sync customers from the (emulated) Stripe API into Nango',
+    version: '1.0.0',
+    endpoints: [{ method: 'GET', path: '/stripe/customers', group: 'Customers' }],
+    frequency: 'every hour',
+    autoStart: true,
+    syncType: 'full',
+
+    metadata: z.void(),
+    models: {
+        StripeCustomer: stripeCustomer
+    },
+
+    exec: async (nango) => {
+        const response = await nango.get({
+            endpoint: '/v1/customers',
+            baseUrlOverride: EMULATOR_BASE_URL,
+            params: { limit: 100 }
+        });
+
+        const rows = (response.data?.data ?? []) as any[];
+        const customers: StripeCustomer[] = rows.map((c: any) => ({
+            id: String(c.id),
+            email: c.email ?? '',
+            name: c.name ?? ''
+        }));
+
+        if (customers.length > 0) {
+            await nango.batchSave(customers, 'StripeCustomer');
+            await nango.log(`Saved ${customers.length} Stripe customers`);
+        }
     }
+});
 
-    if (!res.data?.has_more) break;
-  } while (startingAfter);
-}
+export type NangoSyncLocal = Parameters<(typeof sync)['exec']>[0];
+export default sync;

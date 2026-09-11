@@ -145,5 +145,8 @@ vite.config.ts.timestamp-*
 # Project
 /volume/
 .env
-nango-integrations/.nango/
+/tmp/
+nango-integrations/build/
 nango-integrations/dist/
+nango-integrations/.nango/*
+!nango-integrations/.nango/.gitkeep

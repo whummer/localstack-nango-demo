@@ -1,7 +1,7 @@
 # localstack-nango-demo
 #
 # Run `make` (or `make help`) to see every available target.
-# The local dev loop is: up -> deploy -> bootstrap -> seed -> demo / test -> down
+# Local dev loop:  up -> bootstrap -> deploy -> seed -> sync / demo -> test
 
 SHELL := bash
 .DEFAULT_GOAL := help
@@ -10,6 +10,7 @@ SHELL := bash
 COMPOSE     ?= docker compose
 NANGO_HOST  ?= http://localhost:3003
 LOCALSTACK  ?= http://localhost:4566
+export COMPOSE
 
 # Load .env if present so targets can see LOCALSTACK_AUTH_TOKEN etc.
 ifneq (,$(wildcard .env))
@@ -34,13 +35,18 @@ down: ## Stop the stack and remove containers
 	$(COMPOSE) down
 
 .PHONY: clean
-clean: ## Stop the stack and delete all volumes and local state
+clean: ## Stop the stack and delete all volumes and build artifacts
 	$(COMPOSE) down -v
-	rm -rf volume nango-integrations/dist nango-integrations/.nango
+	rm -rf volume nango-integrations/build nango-integrations/dist
+	find nango-integrations/.nango -type f ! -name .gitkeep -delete 2>/dev/null || true
 
 .PHONY: logs
-logs: ## Tail logs from every container
+logs: ## Tail logs from every container (follows)
 	$(COMPOSE) logs -f --tail=100
+
+.PHONY: logs-dump
+logs-dump: ## Print recent logs once and exit (used by CI)
+	$(COMPOSE) logs --tail=200 --no-color
 
 .PHONY: ps
 ps: ## Show container status
@@ -48,32 +54,48 @@ ps: ## Show container status
 
 ## ─── Integration workflow ───────────────────────────────────────────────────
 
-.PHONY: deploy
-deploy: ## Push nango.yaml and the sync scripts to the local Nango server
-	cd nango-integrations && npx --yes nango deploy dev --auto-confirm
+.PHONY: install
+install: ## Install the nango-integrations dependencies
+	cd nango-integrations && { npm ci --no-audit --no-fund || npm install --no-audit --no-fund; }
+
+.PHONY: compile
+compile: install ## Type-check and build the integration scripts (no server needed)
+	cd nango-integrations && npx nango compile
 
 .PHONY: bootstrap
-bootstrap: ## Register the Stripe/Xero/HubSpot integrations and a demo connection each
+bootstrap: ## Register the provider configs and a demo connection on the Nango server
 	./scripts/bootstrap.sh
+
+.PHONY: deploy
+deploy: install ## Deploy the integration scripts to the local Nango server
+	./scripts/deploy.sh
 
 .PHONY: seed
 seed: ## Create sample records inside the LocalStack app emulators
 	./scripts/seed-emulators.sh
 
+.PHONY: sync
+sync: ## Trigger the syncs and report the records Nango stored
+	./scripts/run-syncs.sh
+
 .PHONY: demo
-demo: ## Read the seeded data back through the Nango proxy
+demo: ## Read the emulator data back through the Nango proxy
 	./scripts/demo.sh
 
 ## ─── Testing ────────────────────────────────────────────────────────────────
 
 .PHONY: test
 test: ## Run the local dev-loop test suite (node --test)
-	node --test tests/
+	NANGO_SECRET_KEY="$$(./scripts/lib.sh nango_secret_key)" node --test tests/
 
 .PHONY: ci
-ci: up deploy bootstrap seed test ## Full loop used by CI: bring up, wire, seed, test
+ci: compile up bootstrap deploy seed sync test ## Full loop used by CI
 
 ## ─── Helpers ────────────────────────────────────────────────────────────────
+
+.PHONY: nango-key
+nango-key: ## Print the self-hosted Nango "dev" environment secret key
+	@./scripts/lib.sh nango_secret_key
 
 .PHONY: check-env
 check-env: ## Verify .env exists and required variables are set

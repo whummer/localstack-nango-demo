@@ -8,13 +8,6 @@
     "node": ">=20"
   },
   "scripts": {
-    "deploy": "cd nango-integrations && nango deploy dev --auto-confirm",
-    "bootstrap": "./scripts/bootstrap.sh",
-    "seed": "./scripts/seed-emulators.sh",
-    "demo": "./scripts/demo.sh",
     "test": "node --test tests/"
-  },
-  "devDependencies": {
-    "nango": "^0.48.0"
   }
 }

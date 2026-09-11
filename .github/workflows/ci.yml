@@ -20,8 +20,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm install
+      - name: Type-check the integration scripts
+        run: make compile
 
       - name: Write .env
         run: |
@@ -29,19 +29,17 @@ jobs:
             echo "LOCALSTACK_AUTH_TOKEN=${{ secrets.LOCALSTACK_AUTH_TOKEN }}"
             echo "NANGO_ENCRYPTION_KEY=${{ secrets.NANGO_ENCRYPTION_KEY }}"
             echo "NANGO_HOSTPORT=http://localhost:3003"
-            echo "NANGO_SECRET_KEY=nango-demo-secret-key"
             echo "DEBUG=0"
           } > .env
-          # Fall back to a throwaway encryption key if the secret is unset.
           grep -q '^NANGO_ENCRYPTION_KEY=.\+' .env || \
             sed -i "s|^NANGO_ENCRYPTION_KEY=.*|NANGO_ENCRYPTION_KEY=$(openssl rand -base64 32)|" .env
 
-      - name: Run the local dev loop (up, deploy, bootstrap, seed, test)
-        run: make ci
+      - name: Run the local dev loop (up, bootstrap, deploy, seed, sync, test)
+        run: make up bootstrap deploy seed sync test
 
       - name: Dump container logs on failure
         if: failure()
-        run: make logs || true
+        run: make logs-dump || true
 
       - name: Tear down
         if: always()

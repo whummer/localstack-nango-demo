@@ -6,15 +6,16 @@ cd "$(dirname "$0")/.."
 # shellcheck source=scripts/lib.sh
 source scripts/lib.sh
 
-NANGO=${NANGO_HOSTPORT:-http://localhost:3003}
-SECRET=${NANGO_SECRET_KEY:-nango-demo-secret-key}
+NANGO="${NANGO_HOSTPORT:-http://localhost:3003}"
+KEY="$(nango_secret_key)"
+[[ -n "$KEY" ]] || die "could not resolve the Nango dev secret key"
 
 # proxy <provider_config_key> <base_url> <path> [extra curl args...]
 proxy() {
   local key=$1 base=$2 path=$3
   shift 3
   curl -sS "${NANGO}/proxy${path}" \
-    -H "Authorization: Bearer ${SECRET}" \
+    -H "Authorization: Bearer ${KEY}" \
     -H "Provider-Config-Key: ${key}" \
     -H "Connection-Id: demo" \
     -H "Base-Url-Override: ${base}" \
