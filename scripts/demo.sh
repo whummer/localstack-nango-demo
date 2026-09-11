@@ -69,8 +69,12 @@ proxy POST resend http://resend.localhost.localstack.cloud:4566 "/emails" \
   pretty '.'
 
 log "logo.dev: fetch a logo"
-proxy GET logodev http://logodev.localhost.localstack.cloud:4566 "/stripe.com" \
-  -H "Authorization: Bearer pk_emulator_0000000000000000000" \
+# ?token=... (the real API's own convention), not an Authorization header:
+# that header authenticates this call to Nango itself, so a second
+# Authorization value here would collide with it instead of reaching the
+# emulator.
+proxy GET logodev http://logodev.localhost.localstack.cloud:4566 \
+  "/stripe.com?token=pk_emulator_0000000000000000000" \
   -o /dev/null -w '  HTTP %{http_code}, content-type %{content_type}\n'
 
 log "demo complete"

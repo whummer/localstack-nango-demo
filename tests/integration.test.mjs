@@ -138,9 +138,11 @@ test(
 test('logo.dev: a logo is fetchable through the Nango proxy', async () => {
     // The emulator rejects calls with no credential at all, same as the real
     // API; any non-empty value is accepted (see wondertwin-ai/wondertwin#README).
-    const res = await proxy('logodev', EMU.logodev, '/stripe.com', {
-        headers: { Authorization: 'Bearer pk_emulator_0000000000000000000' },
-    });
+    // Sent as the real API's own `?token=` param, not an Authorization header:
+    // that header authenticates the call to Nango itself, so a custom one
+    // here would collide with Nango's own secret key instead of reaching
+    // the emulator (confirmed - that's exactly what happened first try).
+    const res = await proxy('logodev', EMU.logodev, '/stripe.com?token=pk_emulator_0000000000000000000');
     await assertOk(res, 'proxy read');
 });
 

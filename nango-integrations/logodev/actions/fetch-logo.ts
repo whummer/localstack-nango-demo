@@ -6,6 +6,10 @@ import * as z from 'zod';
 // Nango) since this demo doesn't have a real logo.dev account - but the
 // emulator itself still rejects calls with no credential at all, the same
 // way the real API does. Any non-empty value works against the emulator.
+// Sent as the real API's own `?token=` query param, not an Authorization
+// header - the proxy's own Authorization header authenticates to Nango
+// itself, so a header here would collide with that instead of reaching
+// the target.
 const EMULATOR_BASE_URL = 'http://logodev.localhost.localstack.cloud:4566';
 
 const input = z.object({
@@ -28,7 +32,7 @@ const action = createAction({
         const response = await nango.get({
             endpoint: `/${input.domain}`,
             baseUrlOverride: EMULATOR_BASE_URL,
-            headers: { Authorization: 'Bearer pk_emulator_0000000000000000000' }
+            params: { token: 'pk_emulator_0000000000000000000' }
         });
 
         return {
