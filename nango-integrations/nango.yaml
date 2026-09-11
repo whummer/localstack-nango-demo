@@ -1,0 +1,45 @@
+integrations:
+  stripe:
+    syncs:
+      stripe-customers:
+        runs: every hour
+        description: Sync customers from the (emulated) Stripe API into Nango
+        output: StripeCustomer
+        endpoint: GET /stripe/customers
+        sync_type: full
+
+  xero:
+    syncs:
+      xero-invoices:
+        runs: every hour
+        description: Sync invoices from the (emulated) Xero Accounting API
+        output: XeroInvoice
+        endpoint: GET /xero/invoices
+        sync_type: full
+
+  hubspot:
+    syncs:
+      hubspot-contacts:
+        runs: every hour
+        description: Sync contacts from the (emulated) HubSpot CRM API
+        output: HubSpotContact
+        endpoint: GET /hubspot/contacts
+        sync_type: full
+
+models:
+  StripeCustomer:
+    id: string
+    email: string
+    name: string
+
+  XeroInvoice:
+    id: string
+    number: string
+    total: number
+    status: string
+
+  HubSpotContact:
+    id: string
+    email: string
+    firstName: string
+    lastName: string

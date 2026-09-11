@@ -1,0 +1,91 @@
+name: localstack-nango-demo
+
+services:
+  # ─── LocalStack, hosting the SaaS application emulators ──────────────────
+  localstack:
+    image: localstack/localstack-pro:latest
+    ports:
+      - "4566:4566"
+    environment:
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?set LOCALSTACK_AUTH_TOKEN in .env}
+      DEBUG: ${DEBUG:-0}
+    volumes:
+      - "./volume:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      default:
+        aliases:
+          # The emulators route on the request Host header. These aliases let
+          # the Nango proxy container reach them by their public names.
+          - stripe.localhost.localstack.cloud
+          - xero.localhost.localstack.cloud
+          - hubspot.localhost.localstack.cloud
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # ─── Nango: server, database, cache ─────────────────────────────────────
+  nango-db:
+    image: postgres:16.0-alpine
+    environment:
+      POSTGRES_USER: nango
+      POSTGRES_PASSWORD: nango
+      POSTGRES_DB: nango
+    volumes:
+      - nango-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nango"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  nango-redis:
+    image: redis:7.2.4
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  nango-server:
+    image: nangohq/nango-server:hosted
+    depends_on:
+      nango-db:
+        condition: service_healthy
+      nango-redis:
+        condition: service_started
+    ports:
+      - "3003:3003"   # REST API + dashboard
+      - "3009:3009"   # Connect UI
+    environment:
+      NANGO_ENCRYPTION_KEY: ${NANGO_ENCRYPTION_KEY:?set NANGO_ENCRYPTION_KEY in .env}
+      NANGO_DB_HOST: nango-db
+      NANGO_DB_PORT: "5432"
+      NANGO_DB_USER: nango
+      NANGO_DB_PASSWORD: nango
+      NANGO_DB_NAME: nango
+      NANGO_DB_SSL: "false"
+      RECORDS_DATABASE_URL: postgres://nango:nango@nango-db:5432/nango
+      NANGO_REDIS_URL: redis://nango-redis:6379
+      SERVER_PORT: "3003"
+      NANGO_SERVER_URL: http://localhost:3003
+      NANGO_PUBLIC_SERVER_URL: http://localhost:3003
+      FLAG_AUTH_ENABLED: "false"
+      FLAG_SERVE_CONNECT_UI: "true"
+      NANGO_DASHBOARD_USERNAME: admin
+      NANGO_DASHBOARD_PASSWORD: admin
+      # Seed the local environment secret key so scripts can run unattended.
+      NANGO_SECRET_KEY: ${NANGO_SECRET_KEY:-nango-demo-secret-key}
+      # Nango's proxy blocks private / loopback override targets by default
+      # (SSRF guard). The emulators are local, so opt in for development only.
+      NANGO_PROXY_ALLOW_PRIVATE_TARGETS: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3003/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  nango-db:
+
+networks:
+  default:
+    name: localstack-nango-demo

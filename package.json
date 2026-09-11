@@ -1,0 +1,20 @@
+{
+  "name": "localstack-nango-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Nango integration loop against LocalStack application emulators",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "deploy": "cd nango-integrations && nango deploy dev --auto-confirm",
+    "bootstrap": "./scripts/bootstrap.sh",
+    "seed": "./scripts/seed-emulators.sh",
+    "demo": "./scripts/demo.sh",
+    "test": "node --test tests/"
+  },
+  "devDependencies": {
+    "nango": "^0.48.0"
+  }
+}
