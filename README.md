@@ -155,11 +155,17 @@ Application Twins are new and evolving, so:
   detects this (`connection_test_failed`) and reports it clearly rather than
   failing the whole loop; their syncs/actions still deploy fine, they just
   have no connection to run against locally.
-- Endpoint coverage per twin is otherwise unverified beyond
-  Stripe/HubSpot/GitHub (the three tests with a hard seed → proxy round
-  trip). The rest are covered by an informational reachability test
-  (`tests/integration.test.mjs`) that reports per-twin status without
-  failing the suite over a single missing route.
+- **Most twins currently implement `POST` (create) but not `GET` (read).**
+  Every twin routes `POST` correctly, but a `GET` to the same twin mostly
+  falls through to LocalStack's default S3 handler instead (a `NoSuchBucket`
+  XML error). As of this writing only Stripe and Linear round-trip a create
+  → proxy-read; `tests/integration.test.mjs` reports every twin's outcome
+  without failing the suite over a single missing route, since this is
+  endpoint coverage, not a wiring bug: a raw echo server swapped in for a
+  twin on the same docker network confirmed the Nango proxy sends the
+  correct `Host` header (which is what LocalStack's twin routing keys off)
+  for `GET` and `POST` alike, so the gap is inside the twin/LocalStack
+  routing, not in this repo or in Nango.
 - `scripts/bootstrap.sh` reads each provider's auth mode from Nango's own
   `GET /providers/<name>` rather than hardcoding it, so it adapts if that
   changes; `scripts/deploy.sh` deploys one sync/action at a time so a
