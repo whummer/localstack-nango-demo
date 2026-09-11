@@ -1,3 +1,10 @@
+import './github/syncs/github-repos.js';
 import './stripe/syncs/stripe-customers.js';
-import './xero/syncs/xero-invoices.js';
+import './twilio/syncs/twilio-messages.js';
 import './hubspot/syncs/hubspot-contacts.js';
+import './linear/syncs/linear-issues.js';
+import './shopify/syncs/shopify-products.js';
+import './slack/syncs/slack-channels.js';
+import './resend/actions/send-email.js';
+import './posthog/syncs/posthog-projects.js';
+import './logodev/actions/fetch-logo.js';

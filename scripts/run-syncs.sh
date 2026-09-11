@@ -40,8 +40,13 @@ run_sync() { # <provider_config_key> <sync_name> <model>
   warn "  ${model}: no records after 60s (check 'make logs')"
 }
 
-run_sync stripe  stripe-customers StripeCustomer
-run_sync xero    xero-invoices    XeroInvoice
-run_sync hubspot hubspot-contacts HubSpotContact
+run_sync github   github-repos      GithubRepo
+run_sync stripe   stripe-customers  StripeCustomer
+run_sync twilio   twilio-messages   TwilioMessage
+run_sync hubspot  hubspot-contacts  HubSpotContact
+run_sync linear   linear-issues     LinearIssue
+run_sync shopify  shopify-products  ShopifyProduct
+run_sync slack    slack-channels    SlackChannel
+run_sync posthog  posthog-projects  PosthogProject
 
-log "syncs complete"
+log "syncs complete (resend/logo.dev are actions, exercised by make demo)"

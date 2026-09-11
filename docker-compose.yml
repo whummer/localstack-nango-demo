@@ -9,17 +9,29 @@ services:
     environment:
       LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?set LOCALSTACK_AUTH_TOKEN in .env}
       DEBUG: ${DEBUG:-0}
+      # Application Twins: SaaS API emulators (Stripe, GitHub, ...), each
+      # mounted on its own `<name>.localhost.localstack.cloud` subdomain.
+      # Undocumented/evolving — see https://github.com/localstack/finance-ops/pull/7
+      # for how this was discovered (env var name, /admin/health readiness).
+      TWINS_ENABLED: "github,stripe,twilio,hubspot,linear,shopify,slack,resend,posthog,logo.dev"
     volumes:
       - "./volume:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
       default:
         aliases:
-          # The emulators route on the request Host header. These aliases let
-          # the Nango proxy container reach them by their public names.
+          # The twins route on the request Host header. These aliases let the
+          # Nango proxy container reach them by their public names.
+          - github.localhost.localstack.cloud
           - stripe.localhost.localstack.cloud
-          - xero.localhost.localstack.cloud
+          - twilio.localhost.localstack.cloud
           - hubspot.localhost.localstack.cloud
+          - linear.localhost.localstack.cloud
+          - shopify.localhost.localstack.cloud
+          - slack.localhost.localstack.cloud
+          - resend.localhost.localstack.cloud
+          - posthog.localhost.localstack.cloud
+          - logo.dev.localhost.localstack.cloud
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
       interval: 5s
