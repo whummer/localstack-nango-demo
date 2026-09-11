@@ -147,18 +147,23 @@ test('Application Twins: create -> read through the Nango proxy (informational)'
         }
     }
 
+    // t.diagnostic(), not a sub-test per twin: a sub-test with no assertion
+    // in its body reports "ok" no matter what its description says, which
+    // made "ok - github: not OK at read (404)" show up as a pass. Diagnostics
+    // print as plain "# ..." lines in the TAP output instead, so nothing here
+    // reads as green unless it actually round-tripped.
     for (const r of results) {
-        await t.test(`${r.twin}: ${r.ok ? 'round trip OK' : `not OK at ${r.stage} (${r.status})`}`, () => {});
+        t.diagnostic(`${r.twin}: ${r.ok ? 'round trip OK' : `not OK at ${r.stage} (${r.status})`}`);
     }
 
     const ok = results.filter((r) => r.ok).length;
-    console.log(`Twin round trips: ${ok}/${results.length} ->`, JSON.stringify(results));
+    t.diagnostic(`Twin round trips: ${ok}/${results.length} -> ${JSON.stringify(results)}`);
     // Only fail if literally nothing round-trips - that would point at the
     // TWINS_ENABLED/proxy wiring itself being broken, not endpoint coverage.
     assert.ok(ok > 0, `expected at least one twin to round-trip, got 0/${results.length}: ${JSON.stringify(results)}`);
 });
 
-test('the stripe-customers sync (informational)', async () => {
+test('the stripe-customers sync (informational)', async (t) => {
     const email = `sync-${Date.now()}@example.com`;
 
     const created = await fetch(`${EMU.stripe}/v1/customers`, {
@@ -173,7 +178,7 @@ test('the stripe-customers sync (informational)', async () => {
         headers: nangoHeaders({ 'Provider-Config-Key': 'stripe', 'Content-Type': 'application/json' }),
         body: JSON.stringify({ syncs: ['stripe-customers'] }),
     });
-    console.log(`sync trigger: ${trigger.status}`);
+    t.diagnostic(`sync trigger: ${trigger.status}`);
 
     let emails = [];
     for (let i = 0; i < 15; i++) {
@@ -186,5 +191,5 @@ test('the stripe-customers sync (informational)', async () => {
         emails = (body.records ?? []).map((r) => r.email);
         if (emails.includes(email)) break;
     }
-    console.log(`stripe-customers sync: ${emails.includes(email) ? 'produced the expected record' : 'no matching record within 30s (see README Known gaps)'}`);
+    t.diagnostic(`stripe-customers sync: ${emails.includes(email) ? 'produced the expected record' : 'no matching record within 30s (see README Known gaps)'}`);
 });
