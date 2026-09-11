@@ -4,14 +4,21 @@
 //   NANGO_SECRET_KEY=$(make -s nango-key) node --test tests/
 //
 // LocalStack's Application Twins are a new, evolving, undocumented feature.
-// As of this writing, every twin correctly routes POST (create) calls, but
-// most don't yet implement the corresponding GET (list/read) route - those
-// fall through to LocalStack's default S3 handler instead of the twin, which
-// shows up as a `NoSuchBucket` XML error. That's an upstream/product-stage
-// gap, not something this repo can fix. So beyond basic health, the checks
-// below are informational: they report what currently round-trips through
-// the Nango proxy, and only fail if the wiring itself (not endpoint
-// coverage) looks broken - see README's "Known gaps".
+// Every twin correctly routes POST (create) calls, but most don't yet
+// implement the corresponding GET (list/read) route - those fall through to
+// LocalStack's default S3 handler instead of the twin (a `NoSuchBucket` XML
+// error). Confirmed with a raw echo server on the same docker network that
+// Nango sends the same, correct Host header for GET and POST alike, so this
+// is a twin/LocalStack routing gap, not something wrong in this repo's
+// wiring or in Nango - see README's "Known gaps".
+//
+// Tests for twins with no read support yet are marked `todo`: they still run
+// and their real assertion is checked, but a failure there is reported
+// (visible in the output as `not ok ... # TODO`) without failing the build.
+// Drop the `todo` option once a twin gains read support. Twilio and Resend
+// are `skip`, not `todo`: Nango verifies their BASIC/API_KEY credentials
+// live against the real API before accepting a connection, so fake
+// credentials structurally can never produce a working connection here.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -50,6 +57,17 @@ const proxy = (providerConfigKey, baseUrl, path, init = {}) =>
         }),
     });
 
+// Fails with the response body for context, without consuming it when the
+// call actually succeeded (awaiting res.text() unconditionally, e.g. inside
+// an assert message template, consumes the body even on the passing path -
+// that previously broke the follow-up res.json() call with "body already
+// read").
+async function assertOk(res, label) {
+    if (!res.ok) {
+        assert.fail(`${label} failed: ${res.status} ${await res.text()}`);
+    }
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 test('LocalStack is healthy', async () => {
@@ -62,134 +80,138 @@ test('Nango server is healthy', async () => {
     assert.equal(res.ok, true);
 });
 
-// Each entry: create a record directly in the twin (proving the twin itself
-// is up), then try to read it back through the Nango proxy (proving the
-// Nango <-> twin wiring). `create` is omitted for twins only exercised as
-// write-only actions here.
-const probes = [
-    {
-        twin: 'github',
-        create: () =>
-            fetch(`${EMU.github}/user/repos`, {
-                method: 'POST',
-                headers: { Authorization: 'Bearer emulator-token', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: `demo-repo-${Date.now()}` }),
-            }),
-        read: () => proxy('github', EMU.github, '/user/repos'),
-    },
-    {
-        twin: 'stripe',
-        create: () =>
-            fetch(`${EMU.stripe}/v1/customers`, {
-                method: 'POST',
-                headers: { Authorization: 'Bearer sk_test_emulator', 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ email: `proxy-${Date.now()}@example.com`, name: 'Proxy Roundtrip' }),
-            }),
-        read: () => proxy('stripe', EMU.stripe, '/v1/customers?limit=100'),
-    },
-    {
-        twin: 'twilio',
-        // No working connection (see README: Nango verifies BASIC credentials
-        // live against the real API, which fake creds can't pass).
-        read: () => proxy('twilio', EMU.twilio, '/2010-04-01/Accounts/AC00000000000000000000000000demo/Messages.json'),
-    },
-    {
-        twin: 'hubspot',
-        create: () =>
-            fetch(`${EMU.hubspot}/crm/v3/objects/contacts`, {
-                method: 'POST',
-                headers: { Authorization: 'Bearer emulator-token', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ properties: { email: `proxy-${Date.now()}@example.com`, firstname: 'Proxy', lastname: 'Roundtrip' } }),
-            }),
-        read: () => proxy('hubspot', EMU.hubspot, '/crm/v3/objects/contacts?properties=email&limit=100'),
-    },
-    {
-        twin: 'linear',
-        read: () =>
-            proxy('linear', EMU.linear, '/graphql', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: 'query { issues(first: 1) { nodes { id } } }' }),
-            }),
-    },
-    { twin: 'shopify', read: () => proxy('shopify', EMU.shopify, '/admin/api/2024-01/products.json') },
-    { twin: 'slack', read: () => proxy('slack', EMU.slack, '/api/conversations.list') },
-    { twin: 'posthog', read: () => proxy('posthog', EMU.posthog, '/api/projects/') },
-    {
-        twin: 'resend',
-        // No working connection either - same reason as twilio.
-        read: () =>
-            proxy('resend', EMU.resend, '/emails', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ from: 'demo@localstack-nango-demo.dev', to: 'ada@example.com', subject: 'Hi', text: 'hi' }),
-            }),
-    },
-    { twin: 'logodev', read: () => proxy('logodev', EMU.logodev, '/stripe.com') },
-];
+test('GitHub: a repo created in the twin is readable through the Nango proxy', { todo: 'twin does not implement GET /user/repos yet' }, async () => {
+    const name = `demo-repo-${Date.now()}`;
+    const created = await fetch(`${EMU.github}/user/repos`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer emulator-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+    });
+    await assertOk(created, 'twin create');
 
-test('Application Twins: create -> read through the Nango proxy (informational)', async (t) => {
-    const results = [];
-
-    for (const p of probes) {
-        if (p.create) {
-            const created = await p.create();
-            if (!created.ok) {
-                results.push({ twin: p.twin, ok: false, stage: 'create', status: created.status });
-                continue;
-            }
-        }
-        try {
-            const res = await p.read();
-            results.push({ twin: p.twin, ok: res.ok, stage: 'read', status: res.status });
-        } catch (err) {
-            results.push({ twin: p.twin, ok: false, stage: 'read', status: 'error', error: String(err) });
-        }
-    }
-
-    // t.diagnostic(), not a sub-test per twin: a sub-test with no assertion
-    // in its body reports "ok" no matter what its description says, which
-    // made "ok - github: not OK at read (404)" show up as a pass. Diagnostics
-    // print as plain "# ..." lines in the TAP output instead, so nothing here
-    // reads as green unless it actually round-tripped.
-    for (const r of results) {
-        t.diagnostic(`${r.twin}: ${r.ok ? 'round trip OK' : `not OK at ${r.stage} (${r.status})`}`);
-    }
-
-    const ok = results.filter((r) => r.ok).length;
-    t.diagnostic(`Twin round trips: ${ok}/${results.length} -> ${JSON.stringify(results)}`);
-    // Only fail if literally nothing round-trips - that would point at the
-    // TWINS_ENABLED/proxy wiring itself being broken, not endpoint coverage.
-    assert.ok(ok > 0, `expected at least one twin to round-trip, got 0/${results.length}: ${JSON.stringify(results)}`);
+    const res = await proxy('github', EMU.github, '/user/repos');
+    await assertOk(res, 'proxy read');
+    const body = await res.json();
+    const names = (Array.isArray(body) ? body : []).map((r) => r.name);
+    assert.ok(names.includes(name), `expected ${name} in ${JSON.stringify(names)}`);
 });
 
-test('the stripe-customers sync (informational)', async (t) => {
-    const email = `sync-${Date.now()}@example.com`;
-
+test('Stripe: a customer created in the twin is readable through the Nango proxy', async () => {
+    const email = `proxy-${Date.now()}@example.com`;
     const created = await fetch(`${EMU.stripe}/v1/customers`, {
         method: 'POST',
         headers: { Authorization: 'Bearer sk_test_emulator', 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ email, name: 'Sync Roundtrip' }),
+        body: new URLSearchParams({ email, name: 'Proxy Roundtrip' }),
     });
-    assert.equal(created.ok, true, `twin create failed: ${created.status}`);
+    await assertOk(created, 'twin create');
 
-    const trigger = await fetch(`${NANGO}/sync/trigger`, {
-        method: 'POST',
-        headers: nangoHeaders({ 'Provider-Config-Key': 'stripe', 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ syncs: ['stripe-customers'] }),
-    });
-    t.diagnostic(`sync trigger: ${trigger.status}`);
-
-    let emails = [];
-    for (let i = 0; i < 15; i++) {
-        await sleep(2000);
-        const res = await fetch(`${NANGO}/records?model=StripeCustomer`, {
-            headers: nangoHeaders({ 'Provider-Config-Key': 'stripe' }),
-        });
-        if (!res.ok) continue;
-        const body = await res.json();
-        emails = (body.records ?? []).map((r) => r.email);
-        if (emails.includes(email)) break;
-    }
-    t.diagnostic(`stripe-customers sync: ${emails.includes(email) ? 'produced the expected record' : 'no matching record within 30s (see README Known gaps)'}`);
+    const res = await proxy('stripe', EMU.stripe, '/v1/customers?limit=100');
+    await assertOk(res, 'proxy read');
+    const body = await res.json();
+    const emails = (body.data ?? []).map((c) => c.email);
+    assert.ok(emails.includes(email), `expected ${email} in ${JSON.stringify(emails)}`);
 });
+
+test(
+    'Twilio: messages are readable through the Nango proxy',
+    { skip: 'no working connection: Nango verifies BASIC credentials live against the real Twilio API' },
+    async () => {
+        const res = await proxy('twilio', EMU.twilio, '/2010-04-01/Accounts/AC00000000000000000000000000demo/Messages.json');
+        await assertOk(res, 'proxy read');
+    },
+);
+
+test('HubSpot: a contact created in the twin is readable through the Nango proxy', { todo: 'twin does not implement GET /crm/v3/objects/contacts yet' }, async () => {
+    const email = `proxy-${Date.now()}@example.com`;
+    const created = await fetch(`${EMU.hubspot}/crm/v3/objects/contacts`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer emulator-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ properties: { email, firstname: 'Proxy', lastname: 'Roundtrip' } }),
+    });
+    await assertOk(created, 'twin create');
+
+    const res = await proxy('hubspot', EMU.hubspot, '/crm/v3/objects/contacts?properties=email&limit=100');
+    await assertOk(res, 'proxy read');
+    const body = await res.json();
+    const emails = (body.results ?? []).map((c) => c.properties?.email);
+    assert.ok(emails.includes(email), `expected ${email} in ${JSON.stringify(emails)}`);
+});
+
+test('Linear: issues are readable through the Nango proxy (GraphQL)', async () => {
+    const res = await proxy('linear', EMU.linear, '/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: 'query { issues(first: 1) { nodes { id } } }' }),
+    });
+    await assertOk(res, 'proxy read');
+    const body = await res.json();
+    assert.ok(Array.isArray(body.data?.issues?.nodes), `expected an issues array, got ${JSON.stringify(body)}`);
+});
+
+test('Shopify: products are readable through the Nango proxy', { todo: 'twin does not implement GET /admin/api/2024-01/products.json yet' }, async () => {
+    const res = await proxy('shopify', EMU.shopify, '/admin/api/2024-01/products.json');
+    await assertOk(res, 'proxy read');
+});
+
+test('Slack: channels are readable through the Nango proxy', { todo: 'twin does not implement GET /api/conversations.list yet' }, async () => {
+    const res = await proxy('slack', EMU.slack, '/api/conversations.list');
+    await assertOk(res, 'proxy read');
+});
+
+test('PostHog: projects are readable through the Nango proxy', { todo: 'twin does not implement GET /api/projects/ yet' }, async () => {
+    const res = await proxy('posthog', EMU.posthog, '/api/projects/');
+    await assertOk(res, 'proxy read');
+});
+
+test(
+    'Resend: an email can be sent through the Nango proxy',
+    { skip: 'no working connection: Nango verifies API_KEY credentials live against the real Resend API' },
+    async () => {
+        const res = await proxy('resend', EMU.resend, '/emails', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from: 'demo@localstack-nango-demo.dev', to: 'ada@example.com', subject: 'Hi', text: 'hi' }),
+        });
+        await assertOk(res, 'proxy send');
+    },
+);
+
+test('logo.dev: a logo is fetchable through the Nango proxy', { todo: 'twin does not implement GET /:domain yet' }, async () => {
+    const res = await proxy('logodev', EMU.logodev, '/stripe.com');
+    await assertOk(res, 'proxy read');
+});
+
+test(
+    'the stripe-customers sync stores records in Nango',
+    { todo: 'deployed sync does not produce records yet even though the direct proxy read works - cause not yet identified' },
+    async (t) => {
+        const email = `sync-${Date.now()}@example.com`;
+
+        const created = await fetch(`${EMU.stripe}/v1/customers`, {
+            method: 'POST',
+            headers: { Authorization: 'Bearer sk_test_emulator', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ email, name: 'Sync Roundtrip' }),
+        });
+        await assertOk(created, 'twin create');
+
+        const trigger = await fetch(`${NANGO}/sync/trigger`, {
+            method: 'POST',
+            headers: nangoHeaders({ 'Provider-Config-Key': 'stripe', 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ syncs: ['stripe-customers'] }),
+        });
+        t.diagnostic(`sync trigger: ${trigger.status}`);
+
+        let emails = [];
+        for (let i = 0; i < 15; i++) {
+            await sleep(2000);
+            const res = await fetch(`${NANGO}/records?model=StripeCustomer`, {
+                headers: nangoHeaders({ 'Provider-Config-Key': 'stripe' }),
+            });
+            if (!res.ok) continue;
+            const body = await res.json();
+            emails = (body.records ?? []).map((r) => r.email);
+            if (emails.includes(email)) break;
+        }
+        assert.ok(emails.includes(email), `expected ${email} in synced records, got ${JSON.stringify(emails)}`);
+    },
+);
