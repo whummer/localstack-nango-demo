@@ -28,16 +28,18 @@ run_sync() { # <provider_config_key> <sync_name> <model>
     -H "Provider-Config-Key: ${pck}" \
     -d "{\"syncs\":[\"${sync}\"]}"
 
-  for _ in $(seq 1 20); do
+  # Short poll: most twins don't implement the read endpoint these syncs need
+  # yet (see README Known gaps), so this is diagnostic rather than a real wait.
+  for _ in $(seq 1 5); do
     local n
     n="$(record_count "$pck" "$model")"
     if [[ "${n:-0}" -gt 0 ]]; then
       log "  ${model}: ${n} record(s)"
       return 0
     fi
-    sleep 3
+    sleep 2
   done
-  warn "  ${model}: no records after 60s (check 'make logs')"
+  warn "  ${model}: no records after 10s (expected for twins without a read endpoint yet)"
 }
 
 run_sync github   github-repos      GithubRepo
