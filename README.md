@@ -147,16 +147,23 @@ needs one repository secret:
 
 Application Twins are new and evolving, so:
 
-- Provider slugs for the newer twins (twilio, linear, shopify, slack, resend,
-  posthog, logo.dev) in `scripts/bootstrap.sh` are best-effort guesses at
-  Nango's catalog naming. `make bootstrap` warns and continues past any that
-  don't exist rather than failing the whole loop.
-- Endpoint coverage per twin is unverified beyond Stripe/HubSpot/GitHub (the
-  three tests with a hard seed → proxy round trip). The rest are covered by an
-  informational reachability test (`tests/integration.test.mjs`) that reports
-  per-twin status without failing the suite over a single missing route.
-- `scripts/deploy.sh` deploys one sync/action at a time so a provider that
-  didn't bootstrap doesn't block the others.
+- **Twilio and Resend never get a working connection here.** Both use an
+  auth mode (`BASIC` / `API_KEY`) for which Nango's own `POST /connections`
+  runs a live credentials check against the *real* API
+  (`api.twilio.com` / `api.resend.com`) before accepting the connection —
+  there's no way to point that check at the twin instead. `make bootstrap`
+  detects this (`connection_test_failed`) and reports it clearly rather than
+  failing the whole loop; their syncs/actions still deploy fine, they just
+  have no connection to run against locally.
+- Endpoint coverage per twin is otherwise unverified beyond
+  Stripe/HubSpot/GitHub (the three tests with a hard seed → proxy round
+  trip). The rest are covered by an informational reachability test
+  (`tests/integration.test.mjs`) that reports per-twin status without
+  failing the suite over a single missing route.
+- `scripts/bootstrap.sh` reads each provider's auth mode from Nango's own
+  `GET /providers/<name>` rather than hardcoding it, so it adapts if that
+  changes; `scripts/deploy.sh` deploys one sync/action at a time so a
+  provider that didn't bootstrap doesn't block the others.
 
 ## Troubleshooting
 

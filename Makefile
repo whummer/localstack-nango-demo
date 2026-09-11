@@ -4,6 +4,7 @@
 # Local dev loop:  up -> bootstrap -> deploy -> seed -> sync / demo -> test
 
 SHELL := bash
+.SHELLFLAGS := -ec
 .DEFAULT_GOAL := help
 .ONESHELL:
 
@@ -27,7 +28,9 @@ up: check-env ## Start LocalStack and the self-hosted Nango stack
 
 .PHONY: wait
 wait: ## Block until LocalStack and Nango are healthy
-	@./scripts/lib.sh wait_for "$(LOCALSTACK)/_localstack/health" "LocalStack"
+	@# 150 tries * 2s = 300s: with 10 Application Twins enabled, LocalStack's
+	@# own startup takes noticeably longer than a bare instance.
+	@./scripts/lib.sh wait_for "$(LOCALSTACK)/_localstack/health" "LocalStack" 150
 	@./scripts/lib.sh wait_for "$(NANGO_HOST)/health" "Nango server"
 
 .PHONY: down
