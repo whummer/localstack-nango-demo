@@ -1,7 +1,7 @@
 import { createSync } from 'nango';
 import * as z from 'zod';
 
-// Nango proxy target: the LocalStack PostHog twin instead of app.posthog.com.
+// Nango proxy target: the LocalStack PostHog emulator instead of app.posthog.com.
 const EMULATOR_BASE_URL = 'http://posthog.localhost.localstack.cloud:4566';
 
 const posthogProject = z.object({

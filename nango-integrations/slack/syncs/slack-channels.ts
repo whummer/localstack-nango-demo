@@ -1,7 +1,7 @@
 import { createSync } from 'nango';
 import * as z from 'zod';
 
-// Nango proxy target: the LocalStack Slack twin instead of slack.com/api.
+// Nango proxy target: the LocalStack Slack emulator instead of slack.com/api.
 const EMULATOR_BASE_URL = 'http://slack.localhost.localstack.cloud:4566';
 
 const slackChannel = z.object({

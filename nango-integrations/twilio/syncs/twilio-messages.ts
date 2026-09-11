@@ -1,7 +1,7 @@
 import { createSync } from 'nango';
 import * as z from 'zod';
 
-// Nango proxy target: the LocalStack Twilio twin instead of api.twilio.com.
+// Nango proxy target: the LocalStack Twilio emulator instead of api.twilio.com.
 const EMULATOR_BASE_URL = 'http://twilio.localhost.localstack.cloud:4566';
 
 // Twilio's REST API is scoped by Account SID in the URL path. This demo uses

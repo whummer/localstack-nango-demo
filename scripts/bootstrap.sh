@@ -6,7 +6,7 @@
 # instead of being hardcoded, since that's the one place it's guaranteed
 # accurate. Two providers (twilio, resend) define a live "verification"
 # endpoint against the *real* API for their auth mode (BASIC / API_KEY) - the
-# LocalStack twins don't accept real credentials for it to succeed against,
+# LocalStack emulators don't accept real credentials for it to succeed against,
 # so those two providers deploy fine but never get a working connection here.
 # That's a Nango security feature (it always verifies API_KEY/BASIC
 # credentials live), not a bug in this script - see README's Known gaps.

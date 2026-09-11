@@ -1,7 +1,7 @@
 import { createAction } from 'nango';
 import * as z from 'zod';
 
-// Nango proxy target: the LocalStack Resend twin instead of api.resend.com.
+// Nango proxy target: the LocalStack Resend emulator instead of api.resend.com.
 const EMULATOR_BASE_URL = 'http://resend.localhost.localstack.cloud:4566';
 
 const input = z.object({

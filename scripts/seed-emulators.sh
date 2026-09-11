@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Create sample records directly in the LocalStack Application Twins, using
-# each vendor's real API shape. Safe to run more than once. Twin endpoint
+# Create sample records directly in the LocalStack Application Emulators, using
+# each vendor's real API shape. Safe to run more than once. Emulator endpoint
 # coverage varies (this feature is undocumented/evolving), so each call
 # prints its status instead of failing the script.
 set -euo pipefail

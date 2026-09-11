@@ -3,19 +3,19 @@
 // Run via `make test` (it injects NANGO_SECRET_KEY), or:
 //   NANGO_SECRET_KEY=$(make -s nango-key) node --test tests/
 //
-// LocalStack's Application Twins are a new, evolving, undocumented feature.
-// Every twin correctly routes POST (create) calls, but most don't yet
+// LocalStack's Application Emulators are a new, evolving, undocumented feature.
+// Every emulator correctly routes POST (create) calls, but most don't yet
 // implement the corresponding GET (list/read) route - those fall through to
-// LocalStack's default S3 handler instead of the twin (a `NoSuchBucket` XML
+// LocalStack's default S3 handler instead of the emulator (a `NoSuchBucket` XML
 // error). Confirmed with a raw echo server on the same docker network that
 // Nango sends the same, correct Host header for GET and POST alike, so this
-// is a twin/LocalStack routing gap, not something wrong in this repo's
+// is an emulator/LocalStack routing gap, not something wrong in this repo's
 // wiring or in Nango - see README's "Known gaps".
 //
-// Tests for twins with no read support yet are marked `todo`: they still run
+// Tests for emulators with no read support yet are marked `todo`: they still run
 // and their real assertion is checked, but a failure there is reported
 // (visible in the output as `not ok ... # TODO`) without failing the build.
-// Drop the `todo` option once a twin gains read support. Twilio and Resend
+// Drop the `todo` option once an emulator gains read support. Twilio and Resend
 // are `skip`, not `todo`: Nango verifies their BASIC/API_KEY credentials
 // live against the real API before accepting a connection, so fake
 // credentials structurally can never produce a working connection here.
@@ -80,14 +80,14 @@ test('Nango server is healthy', async () => {
     assert.equal(res.ok, true);
 });
 
-test('GitHub: a repo created in the twin is readable through the Nango proxy', { todo: 'twin does not implement GET /user/repos yet' }, async () => {
+test('GitHub: a repo created in the emulator is readable through the Nango proxy', { todo: 'emulator does not implement GET /user/repos yet' }, async () => {
     const name = `demo-repo-${Date.now()}`;
     const created = await fetch(`${EMU.github}/user/repos`, {
         method: 'POST',
         headers: { Authorization: 'Bearer emulator-token', 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
     });
-    await assertOk(created, 'twin create');
+    await assertOk(created, 'emulator create');
 
     const res = await proxy('github', EMU.github, '/user/repos');
     await assertOk(res, 'proxy read');
@@ -96,14 +96,14 @@ test('GitHub: a repo created in the twin is readable through the Nango proxy', {
     assert.ok(names.includes(name), `expected ${name} in ${JSON.stringify(names)}`);
 });
 
-test('Stripe: a customer created in the twin is readable through the Nango proxy', async () => {
+test('Stripe: a customer created in the emulator is readable through the Nango proxy', async () => {
     const email = `proxy-${Date.now()}@example.com`;
     const created = await fetch(`${EMU.stripe}/v1/customers`, {
         method: 'POST',
         headers: { Authorization: 'Bearer sk_test_emulator', 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ email, name: 'Proxy Roundtrip' }),
     });
-    await assertOk(created, 'twin create');
+    await assertOk(created, 'emulator create');
 
     const res = await proxy('stripe', EMU.stripe, '/v1/customers?limit=100');
     await assertOk(res, 'proxy read');
@@ -121,14 +121,14 @@ test(
     },
 );
 
-test('HubSpot: a contact created in the twin is readable through the Nango proxy', { todo: 'twin does not implement GET /crm/v3/objects/contacts yet' }, async () => {
+test('HubSpot: a contact created in the emulator is readable through the Nango proxy', { todo: 'emulator does not implement GET /crm/v3/objects/contacts yet' }, async () => {
     const email = `proxy-${Date.now()}@example.com`;
     const created = await fetch(`${EMU.hubspot}/crm/v3/objects/contacts`, {
         method: 'POST',
         headers: { Authorization: 'Bearer emulator-token', 'Content-Type': 'application/json' },
         body: JSON.stringify({ properties: { email, firstname: 'Proxy', lastname: 'Roundtrip' } }),
     });
-    await assertOk(created, 'twin create');
+    await assertOk(created, 'emulator create');
 
     const res = await proxy('hubspot', EMU.hubspot, '/crm/v3/objects/contacts?properties=email&limit=100');
     await assertOk(res, 'proxy read');
@@ -148,17 +148,17 @@ test('Linear: issues are readable through the Nango proxy (GraphQL)', async () =
     assert.ok(Array.isArray(body.data?.issues?.nodes), `expected an issues array, got ${JSON.stringify(body)}`);
 });
 
-test('Shopify: products are readable through the Nango proxy', { todo: 'twin does not implement GET /admin/api/2024-01/products.json yet' }, async () => {
+test('Shopify: products are readable through the Nango proxy', { todo: 'emulator does not implement GET /admin/api/2024-01/products.json yet' }, async () => {
     const res = await proxy('shopify', EMU.shopify, '/admin/api/2024-01/products.json');
     await assertOk(res, 'proxy read');
 });
 
-test('Slack: channels are readable through the Nango proxy', { todo: 'twin does not implement GET /api/conversations.list yet' }, async () => {
+test('Slack: channels are readable through the Nango proxy', { todo: 'emulator does not implement GET /api/conversations.list yet' }, async () => {
     const res = await proxy('slack', EMU.slack, '/api/conversations.list');
     await assertOk(res, 'proxy read');
 });
 
-test('PostHog: projects are readable through the Nango proxy', { todo: 'twin does not implement GET /api/projects/ yet' }, async () => {
+test('PostHog: projects are readable through the Nango proxy', { todo: 'emulator does not implement GET /api/projects/ yet' }, async () => {
     const res = await proxy('posthog', EMU.posthog, '/api/projects/');
     await assertOk(res, 'proxy read');
 });
@@ -176,7 +176,7 @@ test(
     },
 );
 
-test('logo.dev: a logo is fetchable through the Nango proxy', { todo: 'twin does not implement GET /:domain yet' }, async () => {
+test('logo.dev: a logo is fetchable through the Nango proxy', { todo: 'emulator does not implement GET /:domain yet' }, async () => {
     const res = await proxy('logodev', EMU.logodev, '/stripe.com');
     await assertOk(res, 'proxy read');
 });
@@ -192,7 +192,7 @@ test(
             headers: { Authorization: 'Bearer sk_test_emulator', 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ email, name: 'Sync Roundtrip' }),
         });
-        await assertOk(created, 'twin create');
+        await assertOk(created, 'emulator create');
 
         const trigger = await fetch(`${NANGO}/sync/trigger`, {
             method: 'POST',

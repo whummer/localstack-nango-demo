@@ -28,7 +28,7 @@ run_sync() { # <provider_config_key> <sync_name> <model>
     -H "Provider-Config-Key: ${pck}" \
     -d "{\"syncs\":[\"${sync}\"]}"
 
-  # Short poll: most twins don't implement the read endpoint these syncs need
+  # Short poll: most emulators don't implement the read endpoint these syncs need
   # yet (see README Known gaps), so this is diagnostic rather than a real wait.
   for _ in $(seq 1 5); do
     local n
@@ -39,7 +39,7 @@ run_sync() { # <provider_config_key> <sync_name> <model>
     fi
     sleep 2
   done
-  warn "  ${model}: no records after 10s (expected for twins without a read endpoint yet)"
+  warn "  ${model}: no records after 10s (expected for emulators without a read endpoint yet)"
 }
 
 run_sync github   github-repos      GithubRepo

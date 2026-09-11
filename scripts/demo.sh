@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Read/write the twins through the Nango proxy, proving the loop end to end:
-# client -> Nango proxy -> LocalStack Application Twin -> response.
+# Read/write the emulators through the Nango proxy, proving the loop end to end:
+# client -> Nango proxy -> LocalStack Application Emulator -> response.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=scripts/lib.sh

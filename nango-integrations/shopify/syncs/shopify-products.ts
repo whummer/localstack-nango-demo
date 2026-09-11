@@ -1,7 +1,7 @@
 import { createSync } from 'nango';
 import * as z from 'zod';
 
-// Nango proxy target: the LocalStack Shopify twin instead of
+// Nango proxy target: the LocalStack Shopify emulator instead of
 // <store>.myshopify.com.
 const EMULATOR_BASE_URL = 'http://shopify.localhost.localstack.cloud:4566';
 

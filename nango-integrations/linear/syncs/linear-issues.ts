@@ -1,7 +1,7 @@
 import { createSync } from 'nango';
 import * as z from 'zod';
 
-// Nango proxy target: the LocalStack Linear twin instead of api.linear.app.
+// Nango proxy target: the LocalStack Linear emulator instead of api.linear.app.
 const EMULATOR_BASE_URL = 'http://linear.localhost.localstack.cloud:4566';
 
 const linearIssue = z.object({
@@ -26,7 +26,7 @@ const sync = createSync({
     },
 
     // Linear's API is GraphQL: a single POST /graphql endpoint for both
-    // reads and writes, unlike the REST twins.
+    // reads and writes, unlike the REST emulators.
     exec: async (nango) => {
         const response = await nango.post({
             endpoint: '/graphql',

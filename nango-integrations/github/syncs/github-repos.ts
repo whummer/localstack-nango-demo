@@ -1,7 +1,7 @@
 import { createSync } from 'nango';
 import * as z from 'zod';
 
-// Nango proxy target: the LocalStack GitHub twin instead of api.github.com.
+// Nango proxy target: the LocalStack GitHub emulator instead of api.github.com.
 const EMULATOR_BASE_URL = 'http://github.localhost.localstack.cloud:4566';
 
 const githubRepo = z.object({

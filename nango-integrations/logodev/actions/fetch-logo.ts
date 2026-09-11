@@ -1,7 +1,7 @@
 import { createAction } from 'nango';
 import * as z from 'zod';
 
-// Nango proxy target: the LocalStack logo.dev twin instead of img.logo.dev.
+// Nango proxy target: the LocalStack logo.dev emulator instead of img.logo.dev.
 // logo.dev is a public, unauthenticated image API (no OAuth/API key needed
 // for the demo), so this integration uses Nango's "unauthenticated" provider
 // type rather than OAuth2 credentials.

@@ -1,23 +1,23 @@
 # localstack-nango-demo
 
 A sample app that runs a full [Nango](https://www.nango.dev/) integration loop
-against LocalStack's **Application Twins** — emulators of real SaaS APIs
+against LocalStack's **Application Emulators** — emulators of real SaaS APIs
 (Stripe, GitHub, Slack, ...) — so you can develop and test third-party
 integrations without a single real account and without leaving your machine.
 
 ## What this shows
 
 - A self-hosted Nango server, its Postgres and Redis, all in Docker.
-- Ten integrations, one per Application Twin: GitHub, Stripe, Twilio, HubSpot,
+- Ten integrations, one per Application Emulator: GitHub, Stripe, Twilio, HubSpot,
   Linear, Shopify, Slack, Resend, PostHog, logo.dev — written in Nango's
   current zero-yaml `createSync`/`createAction` format.
-- Nango's proxy and syncs pointed at the twins instead of the real APIs, using
+- Nango's proxy and syncs pointed at the emulators instead of the real APIs, using
   a per-request base URL override.
 - One dev loop, `make up bootstrap deploy seed sync test`, that also runs
   unchanged in CI.
 
-> Application Twins are a new, evolving LocalStack feature and not fully
-> documented publicly yet. Endpoint coverage varies by twin — see
+> Application Emulators are a new, evolving LocalStack feature and not fully
+> documented publicly yet. Endpoint coverage varies by emulator — see
 > [Known gaps](#known-gaps).
 
 ## Architecture
@@ -33,22 +33,22 @@ integrations without a single real account and without leaving your machine.
   └─────────────┘   records / responses     └───────────┬──────────────┘
                                                         │ base URL override
                                                         ▼
-                       ┌─────────────────────────────────────────────────┐
-                       │   LocalStack Application Twins        :4566     │
-                       │   github. stripe. twilio. hubspot. linear.      │
-                       │   shopify. slack. resend. posthog. logo.dev.    │
-                       │        localhost.localstack.cloud               │
-                       └─────────────────────────────────────────────────┘
+                       ┌───────────────────────────────────────────────────┐
+                       │     LocalStack Application Emulators       :4566  │
+                       │   github. stripe. twilio. hubspot. linear.        │
+                       │   shopify. slack. resend. posthog. logo.dev.      │
+                       │          localhost.localstack.cloud               │
+                       └───────────────────────────────────────────────────┘
 ```
 
-## How the proxy reaches the twins
+## How the proxy reaches the emulators
 
 Nango's egress guard **always** blocks loopback targets, and
 `*.localhost.localstack.cloud` resolves to `127.0.0.1` on the host. So the demo
 routes around loopback:
 
-1. LocalStack is started with `TWINS_ENABLED=<comma-separated twin names>`,
-   which mounts each twin on its own `<name>.localhost.localstack.cloud`
+1. LocalStack is started with `TWINS_ENABLED=<comma-separated emulator names>`,
+   which mounts each emulator on its own `<name>.localhost.localstack.cloud`
    subdomain (routed by the request `Host` header).
 2. The LocalStack container gets compose network **aliases** for each of those
    subdomains. From the Nango container those names resolve to LocalStack's
@@ -56,7 +56,7 @@ routes around loopback:
 3. `NANGO_OUTBOUND_URL_POLICY` is set to permissive with `blockPrivateIps:false`
    so the proxy is allowed to call that private IP. **Development only.**
 
-This mechanism (env var name, subdomain-per-twin, the loopback pitfall) is not
+This mechanism (env var name, subdomain-per-emulator, the loopback pitfall) is not
 in LocalStack's public docs yet; it was worked out from
 https://github.com/localstack/finance-ops/pull/7.
 
@@ -73,7 +73,7 @@ Two more self-hosted Nango details the demo handles for you:
 
 - Docker and Docker Compose v2
 - Node.js 20+
-- A LocalStack auth token with Application Twins enabled
+- A LocalStack auth token with Application Emulators enabled
   (https://app.localstack.cloud). This is a LocalStack Pro capability.
 
 ## Quickstart
@@ -85,7 +85,7 @@ cp .env.example .env
 make up          # start LocalStack + Nango (server, db, redis)
 make bootstrap   # register the 10 provider configs and a demo connection each
 make deploy      # compile + push the integration scripts to the local server
-make seed        # create sample data inside the twins
+make seed        # create sample data inside the emulators
 make sync        # trigger the syncs, print the records Nango stored
 make demo        # read/write the same data through the Nango proxy
 make test        # run the local dev-loop test suite
@@ -100,7 +100,7 @@ whole loop end to end.
 
 ## Integrations
 
-| Twin    | Provider config key | Nango script kind        | Model / action    |
+| Emulator    | Provider config key | Nango script kind        | Model / action    |
 | ------- | -------------------- | ------------------------ | ------------------ |
 | GitHub  | `github`             | sync `github-repos`      | `GithubRepo`        |
 | Stripe  | `stripe`              | sync `stripe-customers`  | `StripeCustomer`    |
@@ -116,18 +116,18 @@ whole loop end to end.
 ## Project layout
 
 ```
-docker-compose.yml            LocalStack (Application Twins) + Nango stack
+docker-compose.yml            LocalStack (Application Emulators) + Nango stack
 Makefile                      self-describing entrypoint for every task
 .env.example                  required configuration
 nango-integrations/
   package.json / tsconfig     managed by the Nango CLI
   index.ts                    imports every script
-  <twin>/syncs|actions/       createSync/createAction + zod, proxy pointed at the twin
+  <emulator>/syncs|actions/       createSync/createAction + zod, proxy pointed at the emulator
 scripts/
   lib.sh                      shared helpers (wait_for, nango_secret_key)
   bootstrap.sh                create provider configs + connections via the API
   deploy.sh                   nango deploy, one sync/action at a time
-  seed-emulators.sh           create sample records in the twins
+  seed-emulators.sh           create sample records in the emulators
   run-syncs.sh                trigger syncs, poll Nango records
   demo.sh                     read/write through the Nango proxy
 tests/
@@ -140,31 +140,31 @@ tests/
 `.github/workflows/ci.yml` runs the identical loop on every push and PR. It
 needs one repository secret:
 
-- `LOCALSTACK_AUTH_TOKEN` (required, Application Twins are Pro)
+- `LOCALSTACK_AUTH_TOKEN` (required, Application Emulators are Pro)
 - `NANGO_ENCRYPTION_KEY` (optional, a throwaway key is generated if unset)
 
 ## Known gaps
 
-Application Twins are new and evolving, so:
+Application Emulators are new and evolving, so:
 
 - **Twilio and Resend never get a working connection here.** Both use an
   auth mode (`BASIC` / `API_KEY`) for which Nango's own `POST /connections`
   runs a live credentials check against the *real* API
   (`api.twilio.com` / `api.resend.com`) before accepting the connection —
-  there's no way to point that check at the twin instead. `make bootstrap`
+  there's no way to point that check at the emulator instead. `make bootstrap`
   detects this (`connection_test_failed`) and reports it clearly rather than
   failing the whole loop; their syncs/actions still deploy fine, they just
   have no connection to run against locally.
-- **Most twins currently implement `POST` (create) but not `GET` (read).**
-  Every twin routes `POST` correctly, but a `GET` to the same twin mostly
+- **Most emulators currently implement `POST` (create) but not `GET` (read).**
+  Every emulator routes `POST` correctly, but a `GET` to the same emulator mostly
   falls through to LocalStack's default S3 handler instead (a `NoSuchBucket`
   XML error). As of this writing only Stripe and Linear round-trip a create
-  → proxy-read; `tests/integration.test.mjs` reports every twin's outcome
+  → proxy-read; `tests/integration.test.mjs` reports every emulator's outcome
   without failing the suite over a single missing route, since this is
   endpoint coverage, not a wiring bug: a raw echo server swapped in for a
-  twin on the same docker network confirmed the Nango proxy sends the
-  correct `Host` header (which is what LocalStack's twin routing keys off)
-  for `GET` and `POST` alike, so the gap is inside the twin/LocalStack
+  emulator on the same docker network confirmed the Nango proxy sends the
+  correct `Host` header (which is what LocalStack's emulator routing keys off)
+  for `GET` and `POST` alike, so the gap is inside the emulator/LocalStack
   routing, not in this repo or in Nango.
 - `scripts/bootstrap.sh` reads each provider's auth mode from Nango's own
   `GET /providers/<name>` rather than hardcoding it, so it adapts if that
@@ -174,13 +174,13 @@ Application Twins are new and evolving, so:
 ## Troubleshooting
 
 - **`make up` fails on LocalStack**: check `LOCALSTACK_AUTH_TOKEN` and that
-  your plan includes Application Twins. `make logs` tails both stacks.
-- **Proxy calls return `base_url_override_not_allowed`**: the twin hostname
+  your plan includes Application Emulators. `make logs` tails both stacks.
+- **Proxy calls return `base_url_override_not_allowed`**: the emulator hostname
   resolved to `127.0.0.1` instead of the LocalStack container. Confirm the
   network aliases in `docker-compose.yml` and that LocalStack is up.
-- **A twin responds with an S3 `NoSuchBucket` error**: that twin isn't
-  actually mounted — check `TWINS_ENABLED` and the twin's spelling, and check
-  `make logs` for `loaded N twins` at LocalStack startup.
+- **A emulator responds with an S3 `NoSuchBucket` error**: that emulator isn't
+  actually mounted — check `TWINS_ENABLED` and the emulator's spelling, and check
+  `make logs` for `loaded N emulators` at LocalStack startup.
 - **`nango deploy` fails with `file_upload_error`**: the `CI=true` env on
   `nango-server` is missing; the server is trying to use S3.
 - **`make bootstrap` cannot resolve the secret key**: the Nango server or its
