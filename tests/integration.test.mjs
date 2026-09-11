@@ -136,7 +136,11 @@ test(
 );
 
 test('logo.dev: a logo is fetchable through the Nango proxy', async () => {
-    const res = await proxy('logodev', EMU.logodev, '/stripe.com');
+    // The emulator rejects calls with no credential at all, same as the real
+    // API; any non-empty value is accepted (see wondertwin-ai/wondertwin#README).
+    const res = await proxy('logodev', EMU.logodev, '/stripe.com', {
+        headers: { Authorization: 'Bearer pk_emulator_0000000000000000000' },
+    });
     await assertOk(res, 'proxy read');
 });
 
